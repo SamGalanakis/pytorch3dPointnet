@@ -40,7 +40,7 @@ class ModelNet(Dataset):
         
         data  = [parse_off(path) for path in tqdm(self.paths)]
         
-       # data  = [process_shape(Shape(*x)) for x in data]
+       
 
         verts = [torch.tensor(x[0],dtype=torch.float32) for x in data]
         faces  = [torch.tensor(x[1],dtype=torch.int32) for x in data]
