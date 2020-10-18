@@ -43,8 +43,11 @@ class FileReader:
             
 
         lines = [x.rstrip() for x in lines]
-
-        info = [int(x) for x in lines[0].split()]
+        try:
+            info = [int(x) for x in lines[0].split()]
+        except:
+            print('Invalid file no info')
+            return None
         lines = lines[1:]
 
         if len(info) == 4:

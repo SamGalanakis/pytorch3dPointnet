@@ -18,8 +18,8 @@ def get_all_file_paths(directory,extension):
 
 def process_shape(shape):
     shape.make_pyvista_mesh()
-    while shape.pyvista_mesh.n_points<2000:
-        shape.pyvista_mesh.subdivide(2,inplace=True)
+   # while shape.pyvista_mesh.n_points<2000:
+        #shape.pyvista_mesh.subdivide(2,inplace=True)
     shape.pyvista_mesh_to_base(shape.pyvista_mesh)
     return shape
 

@@ -16,7 +16,9 @@ import os
 from mpl_toolkits.mplot3d import Axes3D
 import pyvista as pv
 from file_reader import FileReader
+from off_parser import parse_off
 from shape import Shape
+import random
 
 from pytorch3d.datasets import (
     collate_batched_meshes
@@ -33,12 +35,15 @@ else:
 
 class ModelNet(Dataset):
     def __init__(self,model_net_path,n_samples=2000):
-        self.paths = get_all_file_paths(model_net_path,'off')[0:10]
-        self.reader = FileReader()
-        data  = [process_shape(Shape(*self.reader.read(path))) for path in tqdm(self.paths)]
+        self.paths = get_all_file_paths(model_net_path,'off')[0:2000]
+        
+        
+        data  = [parse_off(path) for path in tqdm(self.paths)]
+        
+       # data  = [process_shape(Shape(*x)) for x in data]
 
-        verts = [torch.tensor(x.vertices,dtype=torch.float32) for x in data]
-        faces  = [torch.tensor(x.element_dict['triangles'].astype(np.int32),dtype=torch.int32) for x in data]
+        verts = [torch.tensor(x[0],dtype=torch.float32) for x in data]
+        faces  = [torch.tensor(x[1],dtype=torch.int32) for x in data]
 
         self.meshes = Meshes(verts=verts,faces=faces)
 
@@ -46,6 +51,7 @@ class ModelNet(Dataset):
         
         self.classifications = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths]
         unique_list = list(set(self.classifications))
+        
         self.class_indexer = { key:unique_list.index(key) for key in unique_list}
         print('Loaded')
 
@@ -61,14 +67,11 @@ class ModelNet(Dataset):
         view(mesh,distance,elevation,azimuth)
      
 
-dataset = ModelNet(r'data/ModelNet40')
-batch_size = 2
-dataset_loader = DataLoader(dataset, batch_size=batch_size)
+# dataset = ModelNet(r'data/ModelNet40')
+# batch_size = 2
+# dataset_loader = DataLoader(dataset, batch_size=batch_size)
 
-for epoch in range(10):
-    for i, data in enumerate(dataset_loader):
-        points = data[0]
-        classifications = data[1]
+
         
 
 
