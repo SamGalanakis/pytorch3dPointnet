@@ -121,6 +121,7 @@ class Classifier(nn.Module):
         self.last_linear_layer = nn.Linear(classifier_layer_dims[-1],
                                            num_classes)
 
+        self.final_dropout = nn.Dropout(p=0.7)
         # Store activation as a class attribute
         self.activation = activation
 

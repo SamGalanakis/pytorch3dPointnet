@@ -34,32 +34,82 @@ else:
 
 
 class ModelNet(Dataset):
-    def __init__(self,model_net_path,n_samples=2000):
-        self.paths = get_all_file_paths(model_net_path,'off')[0:2000]
+    def __init__(self,model_net_path,n_samples=2000,lazy=True):
+        self.lazy = lazy
+        self.n_samples= n_samples
+        self.paths = get_all_file_paths(model_net_path,'off')
         
-        
-        data  = [parse_off(path) for path in tqdm(self.paths)]
-        
-       
+        self.paths_test = [x for x in self.paths if 'test' in x]
+        self.paths_train = set(self.paths).difference_update(set(self.paths_test))
 
-        verts = [torch.tensor(x[0],dtype=torch.float32) for x in data]
-        faces  = [torch.tensor(x[1],dtype=torch.int32) for x in data]
+        self.classifications_test = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths_test]
+        self.classifications_train= [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths_train]
 
-        self.meshes = Meshes(verts=verts,faces=faces)
-
-        self.samples  = sample_points_from_meshes(self.meshes,n_samples,return_normals=False)
-        
-        self.classifications = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths]
-        unique_list = list(set(self.classifications))
+        combined_classifications = set(self.classifications_test).update(set(self.classifications_train))
+        unique_list = sorted(list(combined_classifications ))
         
         self.class_indexer = { key:unique_list.index(key) for key in unique_list}
-        print('Loaded')
+
+        if not lazy:
+            data_train  = [parse_off(path) for path in tqdm(self.paths_train)]
+            data_test = [parse_off(path) for path in tqdm(self.paths_test)]
+
+            verts_train = [torch.tensor(x[0],dtype=torch.float32) for x in data_train]
+            verts_test = [torch.tensor(x[0],dtype=torch.float32) for x in data_test]
+            
+            faces_train  = [torch.tensor(x[1],dtype=torch.int32) for x in data_train]
+            faces_test  = [torch.tensor(x[1],dtype=torch.int32) for x in data_test]
+
+            
+            self.samples_train = sample_points_from_meshes(Meshes(verts=verts_train,faces=faces_train),return_normals=False,num_samples=self.n_samples)
+            self.samples_test = sample_points_from_meshes(Meshes(verts=verts_test,faces=faces_test),return_normals=False,num_samples=self.n_samples)
+
+        #Set mode to train by default
+
+        self.set_mode('train')
+       
+    def set_mode(self,mode):
+        print(f"Setting mode as {mode}")
+
+        self.mode = mode
+        assert mode in ['train','test'], 'Invalid mode not  train or test!'
+
+        if mode == 'train':
+            
+            self.curr_classifications = self.classifications_train
+            self.curr_paths = self.paths_train
+            if  self.lazy:
+                self.curr_samples = self.samples_train
+        else:
+            self.curr_classifications = self.classifications_test
+            self.curr_paths = self.paths_test
+            if  self.lazy:
+                self.curr_samples = self.samples_test
+
+
+
 
     def __len__(self):
-        return len(self.classifications)
+        if self.train:
+            return len(self.classifications_train)
+        else:
+            return len(self.classifications_test)
+    def get_item_lazy(self,index):
+       
+        data = parse_off(self.curr_paths[index])
+        mesh = Meshes([torch.tensor(data[0],dtype=torch.float32)],[torch.tensor(data[1],dtype=torch.int)])
+        try:
+            return torch.squeeze(sample_points_from_meshes(mesh,return_normals=False,num_samples=self.n_samples)),self.class_indexer[self.curr_classifications[index]]
+        except:
+            print(f"Could not sample index {index}")
+            #Make recursive call with random model if one of the models can't be sampled
+            return self.__getitem__(random.randint(0,self.__len__()))
 
     def __getitem__(self, index: int):
-        return self.samples[index] , self.class_indexer[self.classifications[index]]
+     
+        if self.lazy:
+            return self.get_item_lazy(index)
+        return self.curr_samples[index], self.class_indexer[self.curr_classifications[index]]
 
     def view(self,index,distance=100.0,elevation = 50.0,azimuth=0.0):
         mesh , classification = self.__getitem__(index)

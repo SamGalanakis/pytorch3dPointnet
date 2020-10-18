@@ -16,7 +16,7 @@ def parse_off(path):
     n_faces=info[1]
 
     vertices = [[float(y) for y in x.split()] for x in lines[:n_verts]]
-    faces = [[int(y) for y in x.split()][1:] for x in lines[n_verts:]]
+    faces = [[int(y) for y in x.split()[1:]] for x in lines[n_verts:]]
 
     return np.array(vertices,np.float32) , np.array(faces,int)
 
