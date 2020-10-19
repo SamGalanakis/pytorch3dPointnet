@@ -36,12 +36,11 @@ else:
 class ModelNet(Dataset):
     def __init__(self,model_net_path,n_samples=2000,lazy=True,mode='train'):
         assert mode in ['train','test'], 'Invalid mode'
-        print(f'Model in {mode} mode!')
+        print(f'Dataset initialized in {mode} mode!')
         self.mode = mode
         self.lazy = lazy
         self.n_samples= n_samples
-        self.paths = get_all_file_paths(model_net_path,'off')[0:1000]
-        
+        self.paths = get_all_file_paths(model_net_path,'off')
         self.paths_test = sorted([x for x in self.paths if 'test' in x])
         self.paths_train = sorted(list(set(self.paths).difference(set(self.paths_test))))
 
