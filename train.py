@@ -9,12 +9,15 @@ import torch
 import os 
 from torch.optim.lr_scheduler import LambdaLR
 wandb.init(project="pytorch3dpointnet")
-dataset = ModelNet(r'data/ModelNet40')
 
+
+dataset = ModelNet(r'data/ModelNet40',lazy=False)
+dataset_test = ModelNet(r'data/ModelNet40',lazy=False,mode='test')
+assert(dataset.class_indexer == dataset_test.class_indexer), "Different dicts.. different labels!"
 batch_size = 32
 dataset_loader = DataLoader(dataset, batch_size=batch_size,shuffle=True,num_workers=4)
-
-model = Classifier(in_channels=3,feature_size=1024,num_classes=len(dataset.class_indexer),dropout=0)
+dataset_loader_test = DataLoader(dataset_test, batch_size=len(dataset_test),shuffle=True,num_workers=4)
+model = Classifier(in_channels=3,feature_size=1024,num_classes=len(dataset.class_indexer),dropout=0.7)
 model.cuda()
 
 #Must put model on cuda before making scheduler !
@@ -52,13 +55,32 @@ for epoch in tqdm(range(1000)):
         print(f"Batch {i} of epoch {epoch}")
 
 
+    scheduler.step()
 
-
-        
-        
     
-    scheduler.step(epoch)
-    wandb.log({"Epoch accuracy": accuracy_epoch, "Train Loss": sum(loss_his)/len(loss_his)})
-    
-    if epoch != 0 and epoch % 50 == 0:
+    if epoch != 0 and epoch % 10 == 0:
         torch.save(model.state_dict(), os.path.join(wandb.run.dir, f'{epoch}model.pt'))
+
+
+    model.eval()
+    with torch.no_grad():
+        for k, data_test in enumerate(dataset_loader_test):
+            points = data_test[0].cuda()
+            classifications = data_test[1].cuda()
+            outputs = model(points)
+            output_classification = torch.argmax(outputs,dim=1)
+            correct_test  = torch.sum((output_classification == classifications).float()).item()
+            accuracy_test = correct_test/len(output_classification)
+            
+    model.train()
+    wandb.log({"Epoch accuracy": accuracy_epoch, "Train Loss": sum(loss_his)/len(loss_his),'Test accuracy':accuracy_test_total})
+        
+            
+
+
+
+
+
+    #Evaluate:
+
+   

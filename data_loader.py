@@ -34,72 +34,70 @@ else:
 
 
 class ModelNet(Dataset):
-    def __init__(self,model_net_path,n_samples=2000,lazy=True):
+    def __init__(self,model_net_path,n_samples=2000,lazy=True,mode='train'):
+        assert mode in ['train','test'], 'Invalid mode'
+        print(f'Model in {mode} mode!')
+        self.mode = mode
         self.lazy = lazy
         self.n_samples= n_samples
-        self.paths = get_all_file_paths(model_net_path,'off')
+        self.paths = get_all_file_paths(model_net_path,'off')[0:1000]
         
-        self.paths_test = [x for x in self.paths if 'test' in x]
-        self.paths_train = set(self.paths).difference_update(set(self.paths_test))
+        self.paths_test = sorted([x for x in self.paths if 'test' in x])
+        self.paths_train = sorted(list(set(self.paths).difference(set(self.paths_test))))
 
-        self.classifications_test = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths_test]
-        self.classifications_train= [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths_train]
+        if self.mode == 'train':
+            self.paths = self.paths_train
+        elif self.mode == 'test':
+            self.paths = self.paths_test
+        
 
-        combined_classifications = set(self.classifications_test).update(set(self.classifications_train))
-        unique_list = sorted(list(combined_classifications ))
+
+        self.classifications = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths]
+        
+
+        
+        unique_list = sorted(list(set(self.classifications) ))
         
         self.class_indexer = { key:unique_list.index(key) for key in unique_list}
 
         if not lazy:
-            data_train  = [parse_off(path) for path in tqdm(self.paths_train)]
-            data_test = [parse_off(path) for path in tqdm(self.paths_test)]
-
-            verts_train = [torch.tensor(x[0],dtype=torch.float32) for x in data_train]
-            verts_test = [torch.tensor(x[0],dtype=torch.float32) for x in data_test]
+            print(f"Reading .off files")
+            data = [parse_off(path) for path in tqdm(self.paths)]
             
-            faces_train  = [torch.tensor(x[1],dtype=torch.int32) for x in data_train]
-            faces_test  = [torch.tensor(x[1],dtype=torch.int32) for x in data_test]
 
+            verts = [torch.tensor(x[0],dtype=torch.float32) for x in data]
+           
             
-            self.samples_train = sample_points_from_meshes(Meshes(verts=verts_train,faces=faces_train),return_normals=False,num_samples=self.n_samples)
-            self.samples_test = sample_points_from_meshes(Meshes(verts=verts_test,faces=faces_test),return_normals=False,num_samples=self.n_samples)
+            faces  = [torch.tensor(x[1],dtype=torch.int32) for x in data]
+           
 
-        #Set mode to train by default
+            self.samples = []
+            failed_samplings = 0
 
-        self.set_mode('train')
-       
-    def set_mode(self,mode):
-        print(f"Setting mode as {mode}")
-
-        self.mode = mode
-        assert mode in ['train','test'], 'Invalid mode not  train or test!'
-
-        if mode == 'train':
+            print("Sampling models...")
+            for vert_data,face_data in tqdm(zip(verts,faces)):
+                try:
+                    vertices_sample = sample_points_from_meshes(Meshes(verts=[vert_data],faces=[face_data]),return_normals=False,num_samples=self.n_samples)
+                    self.samples.append(vertices_sample.squeeze())
+                except:
+                    failed_samplings +=1
+                    print(f'Failed to load, total: {failed_samplings}')
+                    continue
+            print(f"Failed to sample {failed_samplings} of {len(verts)}" )
             
-            self.curr_classifications = self.classifications_train
-            self.curr_paths = self.paths_train
-            if  self.lazy:
-                self.curr_samples = self.samples_train
-        else:
-            self.curr_classifications = self.classifications_test
-            self.curr_paths = self.paths_test
-            if  self.lazy:
-                self.curr_samples = self.samples_test
 
-
-
+     
+    
 
     def __len__(self):
-        if self.train:
-            return len(self.classifications_train)
-        else:
-            return len(self.classifications_test)
+            return len(self.samples)
+     
     def get_item_lazy(self,index):
        
-        data = parse_off(self.curr_paths[index])
+        data = parse_off(self.paths[index])
         mesh = Meshes([torch.tensor(data[0],dtype=torch.float32)],[torch.tensor(data[1],dtype=torch.int)])
         try:
-            return torch.squeeze(sample_points_from_meshes(mesh,return_normals=False,num_samples=self.n_samples)),self.class_indexer[self.curr_classifications[index]]
+            return torch.squeeze(sample_points_from_meshes(mesh,return_normals=False,num_samples=self.n_samples)),self.class_indexer[self.classifications[index]]
         except:
             print(f"Could not sample index {index}")
             #Make recursive call with random model if one of the models can't be sampled
@@ -109,17 +107,16 @@ class ModelNet(Dataset):
      
         if self.lazy:
             return self.get_item_lazy(index)
-        return self.curr_samples[index], self.class_indexer[self.curr_classifications[index]]
+        return self.samples[index], self.class_indexer[self.classifications[index]]
 
     def view(self,index,distance=100.0,elevation = 50.0,azimuth=0.0):
+        
         mesh , classification = self.__getitem__(index)
         print(f'Classified as : {classification}')
         view(mesh,distance,elevation,azimuth)
      
 
-# dataset = ModelNet(r'data/ModelNet40')
-# batch_size = 2
-# dataset_loader = DataLoader(dataset, batch_size=batch_size)
+
 
 
         
