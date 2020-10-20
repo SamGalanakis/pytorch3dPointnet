@@ -49,7 +49,7 @@ class ModelNet(Dataset):
         elif self.mode == 'test':
             self.paths = self.paths_test
         
-
+        
 
         self.classifications = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths]
         
