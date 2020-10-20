@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from torch import tensor
 from torch.utils.data import Dataset, DataLoader
 from pytorch3d.ops import sample_points_from_meshes
-from utils import get_all_file_paths, process_shape
+from utils import get_all_file_paths, process_shape, view_pointcloud
 from pytorch3d.renderer import Textures
 from pytorch3d.structures import Meshes
 from torch.utils.data import DataLoader
@@ -19,6 +19,8 @@ from file_reader import FileReader
 from off_parser import parse_off
 from shape import Shape
 import random
+
+import pickle
 
 from pytorch3d.datasets import (
     collate_batched_meshes
@@ -51,17 +53,26 @@ class ModelNet(Dataset):
         
         
 
-        self.classifications = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths]
+        classifications = [os.path.basename(os.path.dirname(os.path.dirname(path))) for path in self.paths]
         
 
         
-        unique_list = sorted(list(set(self.classifications) ))
+        unique_list = sorted(list(set(classifications) ))
         
         self.class_indexer = { key:unique_list.index(key) for key in unique_list}
 
         if not lazy:
             print(f"Reading .off files")
-            data = [parse_off(path) for path in tqdm(self.paths)]
+            save_path = f"data/data_{mode}.p"
+            save_exists = os.path.isfile(save_path)
+            if not save_exists:
+                data = [parse_off(path) for path in tqdm(self.paths)]
+                print("Saving data to file")
+                pickle.dump( data, open( save_path, "wb" ) )
+            else:
+                print("Reading from save")
+                data = pickle.load( open( save_path, "rb" ) )
+
             
 
             verts = [torch.tensor(x[0],dtype=torch.float32) for x in data]
@@ -71,13 +82,15 @@ class ModelNet(Dataset):
            
 
             self.samples = []
+            self.classifications =[]
             failed_samplings = 0
-
+            #Also add the classifications to make sure they match after removing problematic models
             print("Sampling models...")
-            for vert_data,face_data in tqdm(zip(verts,faces)):
+            for vert_data,face_data,classification in tqdm(zip(verts,faces,classifications)):
                 try:
                     vertices_sample = sample_points_from_meshes(Meshes(verts=[vert_data],faces=[face_data]),return_normals=False,num_samples=self.n_samples)
                     self.samples.append(vertices_sample.squeeze())
+                    self.classifications.append(classification)
                 except:
                     failed_samplings +=1
                     print(f'Failed to load, total: {failed_samplings}')
@@ -108,11 +121,11 @@ class ModelNet(Dataset):
             return self.get_item_lazy(index)
         return self.samples[index], self.class_indexer[self.classifications[index]]
 
-    def view(self,index,distance=100.0,elevation = 50.0,azimuth=0.0):
+    def view(self,index):
         
-        mesh , classification = self.__getitem__(index)
-        print(f'Classified as : {classification}')
-        view(mesh,distance,elevation,azimuth)
+        points , classification_val = self.__getitem__(index)
+        print(f'Classified as : {self.classifications[index]}')
+        view_pointcloud(points)
      
 
 
