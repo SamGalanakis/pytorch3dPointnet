@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from renderer import view
 import matplotlib.pyplot as plt
-from torch import tensor
+
 from torch.utils.data import Dataset, DataLoader
 from pytorch3d.ops import sample_points_from_meshes
 from utils import get_all_file_paths, process_shape, view_pointcloud
@@ -19,12 +19,11 @@ from file_reader import FileReader
 from off_parser import parse_off
 from shape import Shape
 import random
-
+from utils import farthest_point_sample
+import torch
 import pickle
 
-from pytorch3d.datasets import (
-    collate_batched_meshes
-)
+
 sys.path.append(os.path.abspath(''))
 
 if torch.cuda.is_available():
@@ -76,26 +75,41 @@ class ModelNet(Dataset):
             
 
             verts = [torch.tensor(x[0],dtype=torch.float32) for x in data]
-           
-            
-            faces  = [torch.tensor(x[1],dtype=torch.int32) for x in data]
-           
 
-            self.samples = []
-            self.classifications =[]
-            failed_samplings = 0
+            save_path = f"data/samples_{n_samples}_{mode}.p"
+            save_exists = os.path.isfile(save_path)
+            if not save_exists:
+                self.samples = [farthest_point_sample(vertices,n_samples) for vertices in tqdm(verts)]
+                print("Saving samples to file")
+                pickle.dump( self.samples, open( save_path, "wb" ) )
+            else:
+                print("Reading samples from save")
+                self.samples = pickle.load( open( save_path, "rb" ) )
+            
+
+
+            
+            
+            #faces  = [torch.tensor(x[1],dtype=torch.int32) for x in data]
+            
+            
+            self.classifications=classifications
+
+            #self.samples = []
+            #self.classifications =[]
+            #failed_samplings = 0
             #Also add the classifications to make sure they match after removing problematic models
-            print("Sampling models...")
-            for vert_data,face_data,classification in tqdm(zip(verts,faces,classifications)):
-                try:
-                    vertices_sample = sample_points_from_meshes(Meshes(verts=[vert_data],faces=[face_data]),return_normals=False,num_samples=self.n_samples)
-                    self.samples.append(vertices_sample.squeeze())
-                    self.classifications.append(classification)
-                except:
-                    failed_samplings +=1
-                    print(f'Failed to load, total: {failed_samplings}')
-                    continue
-            print(f"Failed to sample {failed_samplings} of {len(verts)}" )
+            # print("Sampling models...")
+            # for vert_data,face_data,classification in tqdm(zip(verts,faces,classifications)):
+            #     try:
+            #         vertices_sample = sample_points_from_meshes(Meshes(verts=[vert_data],faces=[face_data]),return_normals=False,num_samples=self.n_samples)
+            #         self.samples.append(vertices_sample.squeeze())
+            #         self.classifications.append(classification)
+            #     except:
+            #         failed_samplings +=1
+            #         print(f'Failed to load, total: {failed_samplings}')
+            #         continue
+            # print(f"Failed to sample {failed_samplings} of {len(verts)}" )
             
 
      

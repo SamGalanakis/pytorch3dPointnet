@@ -5,6 +5,40 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from pathlib import Path
+import torch 
+def farthest_point_sample(point, npoint):
+    """
+    Input:
+        xyz: pointcloud data, [N, D]
+        npoint: number of samples
+    Return:
+        centroids: sampled pointcloud index, [npoint, D]
+    """
+   
+    N, D = point.shape
+    xyz = point[:,:3]
+    
+    centroids = torch.zeros((npoint,))
+    
+    distance = (torch.ones((N,)) * 1e10)
+   
+    farthest = torch.randint(0, N, (1,)).item()
+    for i in range(npoint):
+        centroids[i] = farthest
+        centroid = xyz[farthest, :]
+        dist = torch.sum((xyz - centroid) ** 2, -1)
+        mask = dist < distance
+
+
+        #dist_select = torch.masked_select(dist,mask) 
+       # torch.masked_select(distance,mask) = dist_select 
+        distance[mask] = dist[mask]
+        farthest = torch.argmax(distance,-1)
+   
+    point = point[centroids.long()]
+    return point
+
+
 
 def get_all_file_paths(directory,extension):
     '''Get all file paths of given extension for files under given directory '''
